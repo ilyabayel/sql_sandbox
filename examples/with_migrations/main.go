@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"sql_sandbox"
@@ -98,57 +96,13 @@ func (s *UserService) ListUsers() ([]*User, error) {
 	return users, nil
 }
 
-// createMigrationFiles creates example migration files
-func createMigrationFiles(migrationsDir string) error {
-	// Create migrations directory if it doesn't exist
-	if err := os.MkdirAll(migrationsDir, 0755); err != nil {
-		return fmt.Errorf("failed to create migrations directory: %w", err)
-	}
-
-	// Create up migration
-	upMigration := `-- +migrate Up
-CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create index on email for faster lookups
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-`
-
-	// Create down migration
-	downMigration := `-- +migrate Down
-DROP INDEX IF EXISTS idx_users_email;
-DROP TABLE IF EXISTS users;
-`
-
-	// Write migration files
-	upFile := filepath.Join(migrationsDir, "001_create_users_table.up.sql")
-	if err := os.WriteFile(upFile, []byte(upMigration), 0644); err != nil {
-		return fmt.Errorf("failed to write up migration: %w", err)
-	}
-
-	downFile := filepath.Join(migrationsDir, "001_create_users_table.down.sql")
-	if err := os.WriteFile(downFile, []byte(downMigration), 0644); err != nil {
-		return fmt.Errorf("failed to write down migration: %w", err)
-	}
-
-	log.Printf("Created migration files in: %s", migrationsDir)
-	return nil
-}
-
 func main() {
 	// Example database connection string
 	// In a real application, this would come from environment variables
 	mainDBURL := "postgres://username:password@localhost:5432/main_db?sslmode=disable"
 
-	// Create migrations directory and files
+	// Use local file-based migrations
 	migrationsDir := "./migrations"
-	if err := createMigrationFiles(migrationsDir); err != nil {
-		log.Fatalf("Failed to create migration files: %v", err)
-	}
 
 	// Create migration checker using golang-migrate
 	migrationChecker := sql_sandbox.NewGolangMigrateChecker(migrationsDir)

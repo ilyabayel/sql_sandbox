@@ -15,7 +15,7 @@ func getTestDBURL() string {
 	if url := os.Getenv("POSTGRES_URL"); url != "" {
 		return url
 	}
-	return "postgres://testuser:testpass@localhost:5433/main_db?sslmode=disable"
+	return "postgres://testuser:testpass@127.0.0.1:5433/main_db?sslmode=disable"
 }
 
 func TestSandboxWithMigrations(t *testing.T) {
@@ -23,12 +23,8 @@ func TestSandboxWithMigrations(t *testing.T) {
 		t.Skip("Skipping test in short mode")
 	}
 
-	// Create migrations directory and files
-	migrationsDir := "./test_migrations"
-	if err := createMigrationFiles(migrationsDir); err != nil {
-		t.Fatalf("Failed to create migration files: %v", err)
-	}
-	defer os.RemoveAll(migrationsDir)
+	// Use static migrations directory
+	migrationsDir := "./migrations"
 
 	// Create migration checker using golang-migrate
 	migrationChecker := sql_sandbox.NewGolangMigrateChecker(migrationsDir)
@@ -69,12 +65,8 @@ func TestMigrationChecker(t *testing.T) {
 		t.Skip("Skipping test in short mode")
 	}
 
-	// Create migrations directory and files
-	migrationsDir := "./test_migrations_2"
-	if err := createMigrationFiles(migrationsDir); err != nil {
-		t.Fatalf("Failed to create migration files: %v", err)
-	}
-	defer os.RemoveAll(migrationsDir)
+	// Use static migrations directory
+	migrationsDir := "./migrations"
 
 	// Test the migration checker directly
 	migrationChecker := sql_sandbox.NewGolangMigrateChecker(migrationsDir)
