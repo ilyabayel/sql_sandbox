@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -62,14 +63,21 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 		return nil, fmt.Errorf("failed to ensure main DB is migrated: %w", err)
 	}
 
-	// Connect to main database
-	mainDB, err := sql.Open("postgres", config.MainDBURL)
+	// Determine source database name from connection string
+	sourceDBName := extractDBName(config.MainDBURL)
+	if sourceDBName == "" {
+		sourceDBName = "main_db"
+	}
+
+	// Connect to maintenance database (postgres) to manage DB-level operations
+	adminConnStr := replaceDBName(config.MainDBURL, "postgres")
+	adminDB, err := sql.Open("postgres", adminConnStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to main database: %w", err)
+		return nil, fmt.Errorf("failed to connect to admin database: %w", err)
 	}
 
 	// Create template database if it doesn't exist
-	if err := createTemplateDatabase(mainDB, config.TemplateDBName); err != nil {
+	if err := createTemplateDatabase(adminDB, sourceDBName, config.TemplateDBName); err != nil {
 		return nil, fmt.Errorf("failed to create template database: %w", err)
 	}
 
@@ -77,7 +85,7 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	testDBName := generateUniqueDBName(config.TestDBPrefix)
 
 	// Create test database from the template database
-	_, err = createTestDatabase(mainDB, config.TemplateDBName, testDBName)
+	_, err = createTestDatabase(adminDB, config.TemplateDBName, testDBName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create test database: %w", err)
 	}
@@ -93,7 +101,7 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	testDBConn.SetConnMaxLifetime(config.ConnectionTimeout)
 
 	return &Sandbox{
-		TemplateDB: mainDB,
+		TemplateDB: adminDB,
 		TestDB:     testDBConn,
 		DBName:     testDBName,
 		Config:     config,
@@ -168,10 +176,10 @@ func ensureMainDBMigrated(mainDBURL string) error {
 }
 
 // createTemplateDatabase creates a template database from the main database
-func createTemplateDatabase(mainDB *sql.DB, templateDBName string) error {
+func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName string) error {
 	// Check if template database already exists
 	var exists bool
-	err := mainDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
+	err := adminDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
 	if err != nil {
 		return fmt.Errorf("failed to check if template database exists: %w", err)
 	}
@@ -181,16 +189,14 @@ func createTemplateDatabase(mainDB *sql.DB, templateDBName string) error {
 		return nil
 	}
 
-	// Get current database name
-	var currentDB string
-	err = mainDB.QueryRow("SELECT current_database()").Scan(&currentDB)
-	if err != nil {
-		return fmt.Errorf("failed to get current database name: %w", err)
-	}
-
 	// Create template database
-	_, err = mainDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, currentDB))
+	_, err = adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, sourceDBName))
 	if err != nil {
+		// If a race created it already, treat as success
+		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			log.Printf("Template database '%s' already exists", templateDBName)
+			return nil
+		}
 		return fmt.Errorf("failed to create template database: %w", err)
 	}
 
@@ -199,9 +205,9 @@ func createTemplateDatabase(mainDB *sql.DB, templateDBName string) error {
 }
 
 // createTestDatabase creates a test database from the template
-func createTestDatabase(mainDB *sql.DB, templateDBName, testDBName string) (*sql.DB, error) {
+func createTestDatabase(adminDB *sql.DB, templateDBName, testDBName string) (*sql.DB, error) {
 	// Create test database from template
-	_, err := mainDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", testDBName, templateDBName))
+	_, err := adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", testDBName, templateDBName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create test database: %w", err)
 	}
@@ -211,9 +217,9 @@ func createTestDatabase(mainDB *sql.DB, templateDBName, testDBName string) (*sql
 }
 
 // dropTestDatabase drops the test database
-func dropTestDatabase(mainDB *sql.DB, testDBName string) error {
+func dropTestDatabase(adminDB *sql.DB, testDBName string) error {
 	// Terminate all connections to the test database
-	_, err := mainDB.Exec(fmt.Sprintf(`
+	_, err := adminDB.Exec(fmt.Sprintf(`
 		SELECT pg_terminate_backend(pid)
 		FROM pg_stat_activity
 		WHERE datname = '%s' AND pid <> pg_backend_pid()
@@ -223,7 +229,7 @@ func dropTestDatabase(mainDB *sql.DB, testDBName string) error {
 	}
 
 	// Drop the test database
-	_, err = mainDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
+	_, err = adminDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
 	if err != nil {
 		return fmt.Errorf("failed to drop test database: %w", err)
 	}
@@ -262,4 +268,34 @@ func replaceDBName(connStr, newDBName string) string {
 
 	// No query parameters, add dbname
 	return connStr + "?dbname=" + newDBName
+}
+
+// extractDBName tries to determine the database name from a connection string.
+// Supports URL formats like postgres://.../<db> and DSN formats with dbname=...
+func extractDBName(connStr string) string {
+	// DSN format
+	if strings.Contains(connStr, "dbname=") {
+		parts := strings.Split(connStr, " ")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "dbname=") {
+				return strings.TrimPrefix(part, "dbname=")
+			}
+		}
+	}
+
+	// URL format
+	if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
+		if u, err := url.Parse(connStr); err == nil {
+			// Path is like /main_db
+			p := strings.TrimPrefix(u.Path, "/")
+			if p != "" {
+				return p
+			}
+			// Also check query param dbname if present
+			if dbname := u.Query().Get("dbname"); dbname != "" {
+				return dbname
+			}
+		}
+	}
+	return ""
 }

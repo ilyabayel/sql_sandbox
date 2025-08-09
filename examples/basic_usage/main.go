@@ -34,7 +34,7 @@ func (s *UserService) CreateUser(name, email string) (*User, error) {
 		VALUES ($1, $2) 
 		RETURNING id, name, email, created_at
 	`
-	
+
 	var user User
 	err := s.db.QueryRow(query, name, email).Scan(
 		&user.ID, &user.Name, &user.Email, &user.CreatedAt,
@@ -42,7 +42,7 @@ func (s *UserService) CreateUser(name, email string) (*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	return &user, nil
 }
 
@@ -53,7 +53,7 @@ func (s *UserService) GetUserByID(id int) (*User, error) {
 		FROM users 
 		WHERE id = $1
 	`
-	
+
 	var user User
 	err := s.db.QueryRow(query, id).Scan(
 		&user.ID, &user.Name, &user.Email, &user.CreatedAt,
@@ -61,7 +61,7 @@ func (s *UserService) GetUserByID(id int) (*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
-	
+
 	return &user, nil
 }
 
@@ -72,13 +72,13 @@ func (s *UserService) ListUsers() ([]*User, error) {
 		FROM users 
 		ORDER BY id
 	`
-	
+
 	rows, err := s.db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var users []*User
 	for rows.Next() {
 		var user User
@@ -88,11 +88,11 @@ func (s *UserService) ListUsers() ([]*User, error) {
 		}
 		users = append(users, &user)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating users: %w", err)
 	}
-	
+
 	return users, nil
 }
 
@@ -106,12 +106,12 @@ func setupDatabase(db *sql.DB) error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`
-	
+
 	_, err := db.Exec(query)
 	if err != nil {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -119,60 +119,60 @@ func main() {
 	// Example database connection string
 	// In a real application, this would come from environment variables
 	mainDBURL := "postgres://username:password@localhost:5432/main_db?sslmode=disable"
-	
+
 	// Create sandbox configuration
 	config := &sql_sandbox.Config{
-		TemplateDBName:  "template_test",
-		TestDBPrefix:    "test_db_",
-		MaxConnections:  5,
+		TemplateDBName:    "template_test",
+		TestDBPrefix:      "test_db_",
+		MaxConnections:    5,
 		ConnectionTimeout: 10 * time.Second,
 	}
-	
+
 	// Create sandbox
 	sandbox, err := sql_sandbox.New(mainDBURL, config)
 	if err != nil {
 		log.Fatalf("Failed to create sandbox: %v", err)
 	}
 	defer sandbox.Close()
-	
+
 	// Get database connection
 	db := sandbox.DB()
-	
+
 	// Setup database schema
 	if err := setupDatabase(db); err != nil {
 		log.Fatalf("Failed to setup database: %v", err)
 	}
-	
+
 	// Create user service with dependency injection
 	userService := NewUserService(db)
-	
+
 	// Test creating users
 	user1, err := userService.CreateUser("John Doe", "john@example.com")
 	if err != nil {
 		log.Fatalf("Failed to create user: %v", err)
 	}
 	fmt.Printf("Created user: %+v\n", user1)
-	
+
 	user2, err := userService.CreateUser("Jane Smith", "jane@example.com")
 	if err != nil {
 		log.Fatalf("Failed to create user: %v", err)
 	}
 	fmt.Printf("Created user: %+v\n", user2)
-	
+
 	// Test retrieving user
 	retrievedUser, err := userService.GetUserByID(user1.ID)
 	if err != nil {
 		log.Fatalf("Failed to get user: %v", err)
 	}
 	fmt.Printf("Retrieved user: %+v\n", retrievedUser)
-	
+
 	// Test listing users
 	users, err := userService.ListUsers()
 	if err != nil {
 		log.Fatalf("Failed to list users: %v", err)
 	}
 	fmt.Printf("Total users: %d\n", len(users))
-	
+
 	// The sandbox will be automatically cleaned up when the program exits
 	fmt.Println("Example completed successfully!")
 }

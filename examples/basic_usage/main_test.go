@@ -16,7 +16,7 @@ func getTestDBURL() string {
 	if url := os.Getenv("POSTGRES_URL"); url != "" {
 		return url
 	}
-	return "postgres://testuser:testpass@localhost:5433/main_db?sslmode=disable"
+	return "postgres://testuser:testpass@127.0.0.1:5433/main_db_basic_usage?sslmode=disable"
 }
 
 func TestUserService_CreateUser(t *testing.T) {
