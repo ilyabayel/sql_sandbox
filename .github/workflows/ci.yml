@@ -26,11 +26,6 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-    env:
-      POSTGRES_URL_ROOT: postgres://testuser:testpass@127.0.0.1:5433/main_db_root?sslmode=disable
-      POSTGRES_URL_BASIC_USAGE: postgres://testuser:testpass@127.0.0.1:5433/main_db_basic_usage?sslmode=disable
-      POSTGRES_URL_WITH_MIGRATIONS: postgres://testuser:testpass@127.0.0.1:5433/main_db_with_migrations?sslmode=disable
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,27 +58,6 @@ jobs:
           done
           pg_isready -h 127.0.0.1 -p 5433 -U testuser -d main_db
 
-      - name: Prepare databases (one per package)
-        run: |
-          for db in main_db_root main_db_basic_usage main_db_with_migrations; do
-            if ! psql "postgres://testuser:testpass@127.0.0.1:5433/postgres?sslmode=disable" -tAc "SELECT 1 FROM pg_database WHERE datname='${db}'" | grep -q 1; then
-              psql "postgres://testuser:testpass@127.0.0.1:5433/postgres?sslmode=disable" -c "CREATE DATABASE ${db}"
-            fi
-          done
-
-      - name: Run tests (sequential per package)
-        env:
-          POSTGRES_URL_ROOT: ${{ env.POSTGRES_URL_ROOT }}
-          POSTGRES_URL_BASIC_USAGE: ${{ env.POSTGRES_URL_BASIC_USAGE }}
-          POSTGRES_URL_WITH_MIGRATIONS: ${{ env.POSTGRES_URL_WITH_MIGRATIONS }}
-        run: |
-          go version
-          go mod download
-          # Core library tests against dedicated DB
-          POSTGRES_URL=${{ env.POSTGRES_URL_ROOT }} go test -v .
-          # Basic usage example against its own DB
-          POSTGRES_URL=${{ env.POSTGRES_URL_BASIC_USAGE }} go test -v ./examples/basic_usage/...
-          # With migrations example against its own DB
-          POSTGRES_URL=${{ env.POSTGRES_URL_WITH_MIGRATIONS }} go test -v ./examples/with_migrations/...
-
+      - name: Run tests with automated CI setup
+        run: make ci
 
