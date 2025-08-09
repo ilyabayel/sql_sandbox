@@ -67,7 +67,6 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to main database: %w", err)
 	}
-	defer mainDB.Close()
 
 	// Create template database if it doesn't exist
 	if err := createTemplateDatabase(mainDB, config.TemplateDBName); err != nil {
@@ -77,8 +76,8 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	// Generate unique test database name
 	testDBName := generateUniqueDBName(config.TestDBPrefix)
 
-	// Create test database from main database
-	_, err = createTestDatabase(mainDB, "main_db", testDBName)
+	// Create test database from the template database
+	_, err = createTestDatabase(mainDB, config.TemplateDBName, testDBName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create test database: %w", err)
 	}
