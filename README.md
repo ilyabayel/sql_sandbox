@@ -11,11 +11,22 @@ A Go library for creating isolated PostgreSQL database sandboxes for unit testin
 - ✅ **Dependency Injection Ready**: Easy integration with dependency injection patterns
 - ✅ **Thread-safe**: Safe for concurrent test execution
 - ✅ **Configurable**: Flexible configuration options
+- ✅ **Automated Testing Setup**: Complete Docker-based testing environment with `make test`
 
 ## Installation
 
 ```bash
 go get github.com/ilyabayel/sql_sandbox
+```
+
+## Getting Started for Contributors
+
+Want to contribute or run the tests? It's super simple:
+
+```bash
+git clone https://github.com/ilyabayel/sql_sandbox
+cd sql_sandbox
+make test  # That's it! Fully automated setup and testing
 ```
 
 ## Quick Start
@@ -255,13 +266,59 @@ The library provides detailed error messages for common issues:
 - **Connection Pooling**: Configure appropriate connection pool settings for your test environment
 - **Parallel Tests**: The library supports parallel test execution but monitor database connection limits
 
+## Development & Testing
+
+This project includes a fully automated testing setup that makes it easy to run tests and contribute to the project.
+
+### Quick Testing
+
+```bash
+# Run all tests with automated database setup
+make test
+
+# Run tests without database (short mode)
+make test-short
+
+# Clean up and run fresh tests
+make clean && make test
+```
+
+### Available Commands
+
+```bash
+make test        # Set up databases and run all tests
+make test-short  # Run tests without database
+make setup-db    # Set up PostgreSQL and test databases only
+make clean-db    # Clean up databases and Docker volumes
+make clean       # Complete cleanup (databases + test cache)
+make help        # Show all available commands
+```
+
+### What Happens During `make test`
+
+1. **Automated Setup**: Starts PostgreSQL 17 Alpine in Docker
+2. **Database Creation**: Creates all required test databases
+3. **Schema Setup**: Creates tables and indexes automatically
+4. **Test Execution**: Runs all tests with proper environment variables
+5. **Isolation**: Each test gets its own isolated database
+
+### Requirements
+
+- Docker and Docker Compose
+- Go 1.23+
+- Port 5433 available (configurable)
+
+For detailed testing information, see [TESTING.md](TESTING.md).
+
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests for new functionality
+4. Add tests for new functionality: `make test`
 5. Submit a pull request
+
+The automated testing setup ensures all tests pass before merging.
 
 ## License
 
