@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
-    branches: ["**"]
+    branches: ["main"]
 
 jobs:
   test:
@@ -27,7 +27,7 @@ jobs:
           --health-retries=5
 
     env:
-      POSTGRES_URL: postgres://testuser:testpass@localhost:5433/main_db?sslmode=disable
+      POSTGRES_URL: postgres://testuser:testpass@127.0.0.1:5433/main_db?sslmode=disable
 
     steps:
       - name: Checkout
@@ -54,12 +54,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
           for i in {1..30}; do
-            if pg_isready -h localhost -p 5433 -U testuser -d main_db; then
+            if pg_isready -h 127.0.0.1 -p 5433 -U testuser -d main_db; then
               break
             fi
             echo "Waiting for Postgres..." && sleep 2
           done
-          pg_isready -h localhost -p 5433 -U testuser -d main_db
+          pg_isready -h 127.0.0.1 -p 5433 -U testuser -d main_db
 
       - name: Run tests
         env:
