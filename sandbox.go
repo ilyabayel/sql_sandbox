@@ -177,31 +177,34 @@ func ensureMainDBMigrated(mainDBURL string) error {
 
 // createTemplateDatabase creates a template database from the main database
 func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName string) error {
-	// Check if template database already exists
-	var exists bool
-	err := adminDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check if template database exists: %w", err)
-	}
-
-	if exists {
-		log.Printf("Template database '%s' already exists", templateDBName)
+	// Try to create the database first, then handle conflicts
+	// This is more atomic than check-then-create
+	_, err := adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, sourceDBName))
+	if err == nil {
+		log.Printf("Created template database '%s'", templateDBName)
 		return nil
 	}
 
-	// Create template database
-	_, err = adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, sourceDBName))
-	if err != nil {
-		// If a race created it already, treat as success
-		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
-			log.Printf("Template database '%s' already exists", templateDBName)
-			return nil
-		}
-		return fmt.Errorf("failed to create template database: %w", err)
+	// Handle various race condition scenarios
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "already exists") ||
+		strings.Contains(errStr, "duplicate key value violates unique constraint") ||
+		strings.Contains(errStr, "pg_database_datname_index") {
+		log.Printf("Template database '%s' already exists (race condition)", templateDBName)
+		return nil
 	}
 
-	log.Printf("Created template database '%s'", templateDBName)
-	return nil
+	// If it's not a race condition, check if the database actually exists now
+	// This handles edge cases where the error message might be different
+	var exists bool
+	checkErr := adminDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
+	if checkErr == nil && exists {
+		log.Printf("Template database '%s' already exists (verified after error)", templateDBName)
+		return nil
+	}
+
+	// If we get here, it's a real error
+	return fmt.Errorf("failed to create template database: %w", err)
 }
 
 // createTestDatabase creates a test database from the template

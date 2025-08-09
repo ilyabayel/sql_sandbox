@@ -22,6 +22,9 @@ DATABASES=(
 
 echo "Setting up test databases for CI environment..."
 
+# Add a small random delay to reduce race conditions when multiple packages start simultaneously
+sleep $((RANDOM % 3 + 1))
+
 # Check if psql is available (required for CI environment)
 if ! command -v psql &> /dev/null; then
     echo "Error: psql command not found. This script is designed for CI environments with PostgreSQL client installed." >&2
