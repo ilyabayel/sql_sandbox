@@ -1,8 +1,6 @@
 module sql_sandbox
 
-go 1.23
-
-toolchain go1.23.5
+go 1.24.6
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.18.3

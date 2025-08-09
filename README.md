@@ -15,7 +15,7 @@ A Go library for creating isolated PostgreSQL database sandboxes for unit testin
 ## Installation
 
 ```bash
-go get github.com/yourusername/sql_sandbox
+go get github.com/ilyabayel/sql_sandbox
 ```
 
 ## Quick Start
