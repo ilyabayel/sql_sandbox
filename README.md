@@ -28,7 +28,7 @@ import (
     "testing"
     "time"
     
-    "github.com/yourusername/sql_sandbox"
+    "github.com/ilyabayel/sql_sandbox"
 )
 
 func TestUserService(t *testing.T) {
