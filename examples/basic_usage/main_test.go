@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"sql_sandbox"
+	"github.com/ilyabayel/sql_sandbox"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

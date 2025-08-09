@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"sql_sandbox"
+	"github.com/ilyabayel/sql_sandbox"
 )
 
 // User represents a user in the system

@@ -1,4 +1,4 @@
-module sql_sandbox
+module github.com/ilyabayel/sql_sandbox
 
 go 1.24.6
 
