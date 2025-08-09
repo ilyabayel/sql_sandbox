@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: main_db
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd="pg_isready -U testuser -d main_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      POSTGRES_URL: postgres://testuser:testpass@localhost:5433/main_db?sslmode=disable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          check-latest: true
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Wait for Postgres
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5433 -U testuser -d main_db; then
+              break
+            fi
+            echo "Waiting for Postgres..." && sleep 2
+          done
+          pg_isready -h localhost -p 5433 -U testuser -d main_db
+
+      - name: Run tests
+        env:
+          POSTGRES_URL: ${{ env.POSTGRES_URL }}
+        run: |
+          go version
+          go mod download
+          go test -v ./...
+          go test -v ./examples/basic_usage/...
+          go test -v ./examples/with_migrations/...
+          go test -v -run TestSandbox ./...
+
+
