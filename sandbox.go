@@ -148,33 +148,6 @@ func (s *Sandbox) Close() error {
 	return nil
 }
 
-// ensureMainDBMigrated checks if the main database is migrated to the latest version
-func ensureMainDBMigrated(mainDBURL string) error {
-	// This is a placeholder implementation
-	// In a real implementation, you would check your migration system
-	// For example, using golang-migrate, goose, or your custom migration system
-
-	db, err := sql.Open("postgres", mainDBURL)
-	if err != nil {
-		return fmt.Errorf("failed to connect to main database: %w", err)
-	}
-	defer db.Close()
-
-	// Test connection
-	if err := db.Ping(); err != nil {
-		return fmt.Errorf("failed to ping main database: %w", err)
-	}
-
-	// Here you would typically check migration status
-	// For example:
-	// - Check if migration table exists
-	// - Verify all migrations are applied
-	// - Run any pending migrations
-
-	log.Println("Main database migration check completed")
-	return nil
-}
-
 // createTemplateDatabase creates a template database from the main database
 func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName string) error {
 	// Try to create the database first, then handle conflicts
