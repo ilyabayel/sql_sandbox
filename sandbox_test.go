@@ -1,6 +1,7 @@
 package sql_sandbox
 
 import (
+	"context"
 	"database/sql"
 	"os"
 	"testing"
@@ -62,7 +63,7 @@ func TestSandbox(t *testing.T) {
 
 	// Insert test data
 	_, err = db.Exec(`
-		INSERT INTO users (name, email) VALUES 
+		INSERT INTO users (name, email) VALUES
 		('John Doe', 'john@example.com'),
 		('Jane Smith', 'jane@example.com')
 	`)
@@ -96,6 +97,79 @@ func TestSandbox(t *testing.T) {
 	assert.Equal(t, "jane@example.com", users[1].Email)
 
 	// The sandbox will be automatically cleaned up when Close() is called
+}
+
+func TestSandboxWithContext(t *testing.T) {
+	// This test demonstrates using the sandbox with context for timeouts and cancellation
+	mainDBURL := getTestDBURL()
+
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
+
+	// Create a context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Create sandbox with context
+	config := &Config{
+		TemplateDBName:    "template_test",
+		TestDBPrefix:      "test_ctx_",
+		MaxConnections:    5,
+		ConnectionTimeout: 10 * time.Second,
+	}
+
+	sandbox, err := NewWithContext(ctx, mainDBURL, config)
+	require.NoError(t, err)
+	defer sandbox.Close()
+
+	// Get database connection
+	db := sandbox.DB()
+	require.NotNil(t, db)
+
+	// Test database connection with context
+	err = db.PingContext(ctx)
+	require.NoError(t, err)
+
+	// Example: Create a table and insert data using context-aware operations
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS test_ctx_users (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test data with context
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO test_ctx_users (name) VALUES ($1)
+	`, "Context Test User")
+	require.NoError(t, err)
+
+	// Query data with context
+	var userName string
+	err = db.QueryRowContext(ctx, "SELECT name FROM test_ctx_users LIMIT 1").Scan(&userName)
+	require.NoError(t, err)
+	assert.Equal(t, "Context Test User", userName)
+}
+
+func TestSandboxWithCancelledContext(t *testing.T) {
+	// This test demonstrates proper handling of cancelled contexts
+	mainDBURL := getTestDBURL()
+
+	if testing.Short() {
+		t.Skip("Skipping test in short mode")
+	}
+
+	// Create a context and cancel it immediately
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	// Attempt to create sandbox with cancelled context should fail quickly
+	_, err := NewWithContext(ctx, mainDBURL, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
 }
 
 func TestSandboxWithDependencyInjection(t *testing.T) {
@@ -145,8 +219,8 @@ func NewUserService(db *sql.DB) *UserService {
 
 func (s *UserService) CreateUser(name, email string) (*User, error) {
 	query := `
-		INSERT INTO users (name, email) 
-		VALUES ($1, $2) 
+		INSERT INTO users (name, email)
+		VALUES ($1, $2)
 		RETURNING id, name, email, created_at
 	`
 
@@ -163,8 +237,8 @@ func (s *UserService) CreateUser(name, email string) (*User, error) {
 
 func (s *UserService) GetUserByID(id int) (*User, error) {
 	query := `
-		SELECT id, name, email, created_at 
-		FROM users 
+		SELECT id, name, email, created_at
+		FROM users
 		WHERE id = $1
 	`
 

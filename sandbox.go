@@ -1,6 +1,7 @@
 package sql_sandbox
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -43,11 +44,21 @@ func DefaultConfig() *Config {
 
 // New creates a new sandbox instance
 func New(mainDBURL string, config *Config) (*Sandbox, error) {
-	return NewWithMigrationChecker(mainDBURL, config, nil)
+	return NewWithContext(context.Background(), mainDBURL, config)
+}
+
+// NewWithContext creates a new sandbox instance with context
+func NewWithContext(ctx context.Context, mainDBURL string, config *Config) (*Sandbox, error) {
+	return NewWithMigrationCheckerAndContext(ctx, mainDBURL, config, nil)
 }
 
 // NewWithMigrationChecker creates a new sandbox instance with a custom migration checker
 func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker MigrationChecker) (*Sandbox, error) {
+	return NewWithMigrationCheckerAndContext(context.Background(), mainDBURL, config, migrationChecker)
+}
+
+// NewWithMigrationCheckerAndContext creates a new sandbox instance with a custom migration checker and context
+func NewWithMigrationCheckerAndContext(ctx context.Context, mainDBURL string, config *Config, migrationChecker MigrationChecker) (*Sandbox, error) {
 	if config == nil {
 		config = DefaultConfig()
 	}
@@ -59,7 +70,7 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	}
 
 	// Ensure main database is migrated to latest version
-	if err := migrationChecker.EnsureMigrated(config.MainDBURL); err != nil {
+	if err := migrationChecker.EnsureMigratedWithContext(ctx, config.MainDBURL); err != nil {
 		return nil, fmt.Errorf("failed to ensure main DB is migrated: %w", err)
 	}
 
@@ -76,8 +87,15 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 		return nil, fmt.Errorf("failed to connect to admin database: %w", err)
 	}
 
+	// Test admin database connection with context
+	if err := adminDB.PingContext(ctx); err != nil {
+		adminDB.Close()
+		return nil, fmt.Errorf("failed to ping admin database: %w", err)
+	}
+
 	// Create template database if it doesn't exist
-	if err := createTemplateDatabase(adminDB, sourceDBName, config.TemplateDBName); err != nil {
+	if err := createTemplateDatabase(ctx, adminDB, sourceDBName, config.TemplateDBName); err != nil {
+		adminDB.Close()
 		return nil, fmt.Errorf("failed to create template database: %w", err)
 	}
 
@@ -85,15 +103,24 @@ func NewWithMigrationChecker(mainDBURL string, config *Config, migrationChecker 
 	testDBName := generateUniqueDBName(config.TestDBPrefix)
 
 	// Create test database from the template database
-	_, err = createTestDatabase(adminDB, config.TemplateDBName, testDBName)
+	_, err = createTestDatabase(ctx, adminDB, config.TemplateDBName, testDBName)
 	if err != nil {
+		adminDB.Close()
 		return nil, fmt.Errorf("failed to create test database: %w", err)
 	}
 
 	// Connect to test database
 	testDBConn, err := sql.Open("postgres", replaceDBName(config.MainDBURL, testDBName))
 	if err != nil {
+		adminDB.Close()
 		return nil, fmt.Errorf("failed to connect to test database: %w", err)
+	}
+
+	// Test test database connection with context
+	if err := testDBConn.PingContext(ctx); err != nil {
+		testDBConn.Close()
+		adminDB.Close()
+		return nil, fmt.Errorf("failed to ping test database: %w", err)
 	}
 
 	// Configure connection pool
@@ -129,7 +156,7 @@ func (s *Sandbox) Close() error {
 
 	// Drop test database
 	if s.DBName != "" {
-		if err := dropTestDatabase(s.TemplateDB, s.DBName); err != nil {
+		if err := dropTestDatabase(context.Background(), s.TemplateDB, s.DBName); err != nil {
 			errors = append(errors, fmt.Sprintf("failed to drop test database: %v", err))
 		}
 	}
@@ -149,10 +176,10 @@ func (s *Sandbox) Close() error {
 }
 
 // createTemplateDatabase creates a template database from the main database
-func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName string) error {
+func createTemplateDatabase(ctx context.Context, adminDB *sql.DB, sourceDBName string, templateDBName string) error {
 	// Try to create the database first, then handle conflicts
 	// This is more atomic than check-then-create
-	_, err := adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, sourceDBName))
+	_, err := adminDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", templateDBName, sourceDBName))
 	if err == nil {
 		log.Printf("Created template database '%s'", templateDBName)
 		return nil
@@ -170,7 +197,7 @@ func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName
 	// If it's not a race condition, check if the database actually exists now
 	// This handles edge cases where the error message might be different
 	var exists bool
-	checkErr := adminDB.QueryRow("SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
+	checkErr := adminDB.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", templateDBName).Scan(&exists)
 	if checkErr == nil && exists {
 		log.Printf("Template database '%s' already exists (verified after error)", templateDBName)
 		return nil
@@ -181,9 +208,9 @@ func createTemplateDatabase(adminDB *sql.DB, sourceDBName string, templateDBName
 }
 
 // createTestDatabase creates a test database from the template
-func createTestDatabase(adminDB *sql.DB, templateDBName, testDBName string) (*sql.DB, error) {
+func createTestDatabase(ctx context.Context, adminDB *sql.DB, templateDBName, testDBName string) (*sql.DB, error) {
 	// Create test database from template
-	_, err := adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", testDBName, templateDBName))
+	_, err := adminDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", testDBName, templateDBName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create test database: %w", err)
 	}
@@ -193,9 +220,9 @@ func createTestDatabase(adminDB *sql.DB, templateDBName, testDBName string) (*sq
 }
 
 // dropTestDatabase drops the test database
-func dropTestDatabase(adminDB *sql.DB, testDBName string) error {
+func dropTestDatabase(ctx context.Context, adminDB *sql.DB, testDBName string) error {
 	// Terminate all connections to the test database
-	_, err := adminDB.Exec(fmt.Sprintf(`
+	_, err := adminDB.ExecContext(ctx, fmt.Sprintf(`
 		SELECT pg_terminate_backend(pid)
 		FROM pg_stat_activity
 		WHERE datname = '%s' AND pid <> pg_backend_pid()
@@ -205,7 +232,7 @@ func dropTestDatabase(adminDB *sql.DB, testDBName string) error {
 	}
 
 	// Drop the test database
-	_, err = adminDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
+	_, err = adminDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
 	if err != nil {
 		return fmt.Errorf("failed to drop test database: %w", err)
 	}

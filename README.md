@@ -35,6 +35,7 @@ make test  # That's it! Fully automated setup and testing
 package main
 
 import (
+    "context"
     "database/sql"
     "testing"
     "time"
@@ -46,7 +47,11 @@ func TestUserService(t *testing.T) {
     // Create sandbox with your main database connection
     mainDBURL := "postgres://username:password@localhost:5432/main_db?sslmode=disable"
     
-    sandbox, err := sql_sandbox.New(mainDBURL, nil)
+    // Create with context for timeout and cancellation support
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    sandbox, err := sql_sandbox.NewWithContext(ctx, mainDBURL, nil)
     if err != nil {
         t.Fatal(err)
     }
@@ -55,11 +60,43 @@ func TestUserService(t *testing.T) {
     // Get the test database connection
     db := sandbox.DB()
     
-    // Use the database in your tests
+    // Use context-aware database operations in your tests
+    err = db.PingContext(ctx)
+    if err != nil {
+        t.Fatal(err)
+    }
+    
     // The database is a fresh copy of your main database
     // with all migrations applied
 }
 ```
+
+## Context Support
+
+The library provides full context support for timeout handling and cancellation:
+
+```go
+// Create sandbox with context
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+sandbox, err := sql_sandbox.NewWithContext(ctx, mainDBURL, config)
+if err != nil {
+    return err
+}
+defer sandbox.Close()
+
+// Use context-aware database operations
+db := sandbox.DB()
+err = db.ExecContext(ctx, "CREATE TABLE users (id SERIAL, name TEXT)")
+```
+
+### Context Benefits
+
+- ✅ **Timeout Control**: Set timeouts for database operations
+- ✅ **Cancellation**: Cancel long-running operations
+- ✅ **Resource Management**: Proper cleanup on context cancellation
+- ✅ **Migration Support**: Context-aware migration checking
 
 ## Configuration
 
@@ -98,14 +135,18 @@ When `sandbox.Close()` is called, the test database is automatically dropped, en
 func TestBasicDatabase(t *testing.T) {
     mainDBURL := "postgres://user:pass@localhost:5432/main_db"
     
-    sandbox, err := sql_sandbox.New(mainDBURL, nil)
+    // Use context for timeout and cancellation
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    
+    sandbox, err := sql_sandbox.NewWithContext(ctx, mainDBURL, nil)
     require.NoError(t, err)
     defer sandbox.Close()
     
     db := sandbox.DB()
     
-    // Your test code here
-    _, err = db.Exec("CREATE TABLE test_table (id SERIAL PRIMARY KEY, name TEXT)")
+    // Use context-aware database operations
+    _, err = db.ExecContext(ctx, "CREATE TABLE test_table (id SERIAL PRIMARY KEY, name TEXT)")
     require.NoError(t, err)
 }
 ```
