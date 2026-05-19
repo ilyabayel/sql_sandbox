@@ -116,6 +116,12 @@ func setupDatabase(db *sql.DB) error {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+}
+
+func run() error {
 	// Example database connection string
 	// In a real application, this would come from environment variables
 	mainDBURL := "postgres://username:password@localhost:5432/main_db?sslmode=disable"
@@ -131,7 +137,7 @@ func main() {
 	// Create sandbox
 	sandbox, err := sql_sandbox.New(mainDBURL, config)
 	if err != nil {
-		log.Fatalf("Failed to create sandbox: %v", err)
+		return fmt.Errorf("failed to create sandbox: %w", err)
 	}
 	defer sandbox.Close()
 
@@ -140,7 +146,7 @@ func main() {
 
 	// Setup database schema
 	if err := setupDatabase(db); err != nil {
-		log.Fatalf("Failed to setup database: %v", err)
+		return fmt.Errorf("failed to setup database: %w", err)
 	}
 
 	// Create user service with dependency injection
@@ -149,30 +155,31 @@ func main() {
 	// Test creating users
 	user1, err := userService.CreateUser("John Doe", "john@example.com")
 	if err != nil {
-		log.Fatalf("Failed to create user: %v", err)
+		return fmt.Errorf("failed to create user: %w", err)
 	}
 	fmt.Printf("Created user: %+v\n", user1)
 
 	user2, err := userService.CreateUser("Jane Smith", "jane@example.com")
 	if err != nil {
-		log.Fatalf("Failed to create user: %v", err)
+		return fmt.Errorf("failed to create user: %w", err)
 	}
 	fmt.Printf("Created user: %+v\n", user2)
 
 	// Test retrieving user
 	retrievedUser, err := userService.GetUserByID(user1.ID)
 	if err != nil {
-		log.Fatalf("Failed to get user: %v", err)
+		return fmt.Errorf("failed to get user: %w", err)
 	}
 	fmt.Printf("Retrieved user: %+v\n", retrievedUser)
 
 	// Test listing users
 	users, err := userService.ListUsers()
 	if err != nil {
-		log.Fatalf("Failed to list users: %v", err)
+		return fmt.Errorf("failed to list users: %w", err)
 	}
 	fmt.Printf("Total users: %d\n", len(users))
 
-	// The sandbox will be automatically cleaned up when the program exits
+	// The sandbox will be properly cleaned up by the defer sandbox.Close() above
 	fmt.Println("Example completed successfully!")
+	return nil
 }
