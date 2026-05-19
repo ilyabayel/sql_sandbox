@@ -56,7 +56,7 @@ func TestExtractDBName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := extractDBName(tc.connStr)
+			actual := ExtractDBName(tc.connStr)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}
@@ -121,7 +121,7 @@ func TestReplaceDBName(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := replaceDBName(tc.connStr, tc.newDBName)
+			actual := ReplaceDBName(tc.connStr, tc.newDBName)
 			assert.Equal(t, tc.expected, actual)
 		})
 	}

@@ -77,13 +77,13 @@ func NewWithMigrationCheckerAndContext(ctx context.Context, mainDBURL string, co
 	}
 
 	// Determine source database name from connection string
-	sourceDBName := extractDBName(config.MainDBURL)
+	sourceDBName := ExtractDBName(config.MainDBURL)
 	if sourceDBName == "" {
 		sourceDBName = "main_db"
 	}
 
 	// Connect to maintenance database (postgres) to manage DB-level operations
-	adminConnStr := replaceDBName(config.MainDBURL, "postgres")
+	adminConnStr := ReplaceDBName(config.MainDBURL, "postgres")
 	adminDB, err := sql.Open("postgres", adminConnStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to admin database: %w", err)
@@ -128,7 +128,7 @@ func NewWithMigrationCheckerAndContext(ctx context.Context, mainDBURL string, co
 	}
 
 	// Connect to test database
-	testDBConn, err := sql.Open("postgres", replaceDBName(config.MainDBURL, testDBName))
+	testDBConn, err := sql.Open("postgres", ReplaceDBName(config.MainDBURL, testDBName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to test database: %w", err)
 	}
@@ -171,7 +171,7 @@ func (s *Sandbox) Close() error {
 
 	// Drop test database
 	if s.DBName != "" {
-		adminConnStr := replaceDBName(s.Config.MainDBURL, "postgres")
+		adminConnStr := ReplaceDBName(s.Config.MainDBURL, "postgres")
 		adminDB, err := sql.Open("postgres", adminConnStr)
 		if err != nil {
 			errors = append(errors, fmt.Sprintf("failed to connect to admin DB to drop test DB: %v", err))
@@ -282,8 +282,8 @@ func generateUniqueDBName(prefix string) string {
 	return fmt.Sprintf("%s%d_%d_%d", prefix, timestamp, pid, seq)
 }
 
-// replaceDBName replaces the database name in a connection string
-func replaceDBName(connStr, newDBName string) string {
+// ReplaceDBName replaces the database name in a connection string
+func ReplaceDBName(connStr, newDBName string) string {
 	// Try parsing as DSN first if it contains key=value but is not a URL
 	if strings.Contains(connStr, "=") && !strings.HasPrefix(connStr, "postgres://") && !strings.HasPrefix(connStr, "postgresql://") {
 		parts := strings.Split(connStr, " ")
@@ -318,9 +318,9 @@ func replaceDBName(connStr, newDBName string) string {
 	return connStr + "?dbname=" + newDBName
 }
 
-// extractDBName tries to determine the database name from a connection string.
+// ExtractDBName tries to determine the database name from a connection string.
 // Supports URL formats like postgres://.../<db> and DSN formats with dbname=...
-func extractDBName(connStr string) string {
+func ExtractDBName(connStr string) string {
 	// URL format
 	if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
 		if u, err := url.Parse(connStr); err == nil {

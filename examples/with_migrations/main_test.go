@@ -13,7 +13,8 @@ import (
 // getTestDBURL returns the test database URL from environment or default
 func getTestDBURL() string {
 	if url := os.Getenv("POSTGRES_URL"); url != "" {
-		return url
+		// In CI environments, POSTGRES_URL is often shared, but we need an isolated DB
+		return sql_sandbox.ReplaceDBName(url, "main_db_with_migrations")
 	}
 	return "postgres://testuser:testpass@127.0.0.1:5433/main_db_with_migrations?sslmode=disable"
 }

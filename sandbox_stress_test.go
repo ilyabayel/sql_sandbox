@@ -34,13 +34,13 @@ func getStressTestDBURL(dbName string) string {
 	if url == "" {
 		url = "postgres://testuser:testpass@127.0.0.1:5433/" + dbName + "?sslmode=disable"
 	} else {
-		url = replaceDBName(url, dbName)
+		url = ReplaceDBName(url, dbName)
 	}
 	return url
 }
 
 func countActiveConnections(t *testing.T, dbName string) int {
-	adminURL := replaceDBName(getStressTestDBURL("postgres"), "postgres")
+	adminURL := ReplaceDBName(getStressTestDBURL("postgres"), "postgres")
 	db, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
 	defer db.Close()
@@ -56,7 +56,7 @@ func countActiveConnections(t *testing.T, dbName string) int {
 }
 
 func countTotalConnections(t *testing.T) int {
-	adminURL := replaceDBName(getStressTestDBURL("postgres"), "postgres")
+	adminURL := ReplaceDBName(getStressTestDBURL("postgres"), "postgres")
 	db, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
 	defer db.Close()
@@ -240,7 +240,7 @@ func TestSandbox_TeardownReliability(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the database is actually gone
-	adminURL := replaceDBName(getStressTestDBURL("postgres"), "postgres")
+	adminURL := ReplaceDBName(getStressTestDBURL("postgres"), "postgres")
 	adminDB, err := sql.Open("postgres", adminURL)
 	require.NoError(t, err)
 	defer adminDB.Close()
