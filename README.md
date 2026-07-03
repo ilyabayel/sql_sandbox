@@ -4,14 +4,14 @@ A Go library for creating isolated PostgreSQL database sandboxes for unit testin
 
 ## Features
 
-- ✅ **Automatic Migration Check**: Ensures the main database is migrated to the latest version before creating test databases
-- ✅ **Template-based Database Creation**: Creates test databases from a template database for fast setup
-- ✅ **Unique Database Names**: Generates unique database names to prevent conflicts
-- ✅ **Automatic Cleanup**: Automatically drops test databases after each test
-- ✅ **Dependency Injection Ready**: Easy integration with dependency injection patterns
-- ✅ **Thread-safe**: Safe for concurrent test execution
-- ✅ **Configurable**: Flexible configuration options
-- ✅ **Automated Testing Setup**: Complete Docker-based testing environment with `make test`
+- **Automatic Migration Check**: Ensures the main database is migrated to the latest version before creating test databases
+- **Template-based Database Creation**: Creates test databases from a template database for fast setup
+- **Unique Database Names**: Generates unique database names to prevent conflicts
+- **Automatic Cleanup**: Automatically drops test databases after each test
+- **Dependency Injection Ready**: Easy integration with dependency injection patterns
+- **Thread-safe**: Safe for concurrent test execution
+- **Configurable**: Flexible configuration options
+- **Automated Testing Setup**: Complete Docker-based testing environment with `make test`
 
 ## Installation
 
@@ -93,10 +93,10 @@ err = db.ExecContext(ctx, "CREATE TABLE users (id SERIAL, name TEXT)")
 
 ### Context Benefits
 
-- ✅ **Timeout Control**: Set timeouts for database operations
-- ✅ **Cancellation**: Cancel long-running operations
-- ✅ **Resource Management**: Proper cleanup on context cancellation
-- ✅ **Migration Support**: Context-aware migration checking
+- **Timeout Control**: Set timeouts for database operations
+- **Cancellation**: Cancel long-running operations
+- **Resource Management**: Proper cleanup on context cancellation
+- **Migration Support**: Context-aware migration checking
 
 ## Configuration
 
